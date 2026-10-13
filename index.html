@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3단 6단 사과 받기 게임</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Jua&display=swap');
+        
+        body {
+            font-family: 'Jua', sans-serif;
+            background-color: #e0f2fe; /* 맑은 하늘색 */
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* 스크롤 방지 */
+            touch-action: none; /* 모바일 새로고침/스크롤 방지 */
+            user-select: none;
+        }
+
+        /* 팝 애니메이션 */
+        .pop {
+            animation: pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes pop {
+            0% { transform: scale(0.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* 배경 구름 애니메이션 */
+        .cloud {
+            position: absolute;
+            background: white;
+            border-radius: 50px;
+            opacity: 0.8;
+            animation: float linear infinite;
+            z-index: 0;
+        }
+        .cloud::before, .cloud::after {
+            content: '';
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+        }
+        @keyframes float {
+            from { transform: translateX(100vw); }
+            to { transform: translateX(-200px); }
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center w-screen h-screen relative">
+
+    <div class="cloud w-32 h-10 top-10" style="animation-duration: 40s;">
+        <div class="w-12 h-12 -top-6 left-4"></div>
+        <div class="w-16 h-16 -top-8 left-12"></div>
+    </div>
+    <div class="cloud w-24 h-8 top-32" style="animation-duration: 30s; animation-delay: -15s;">
+        <div class="w-10 h-10 -top-5 left-3"></div>
+        <div class="w-12 h-12 -top-6 left-10"></div>
+    </div>
+    
+    <div class="absolute bottom-0 w-full h-1/6 bg-green-500 z-0 border-t-8 border-green-600"></div>
+
+    <div id="game-container" class="relative w-full max-w-lg h-full max-h-[800px] bg-transparent z-10 flex flex-col">
+        
+        <!-- 시작 화면 -->
+        <div id="start-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm z-50 rounded-3xl m-4 shadow-2xl pop">
+            <h1 class="text-5xl text-red-500 mb-6 drop-shadow-md text-center leading-tight">🍎 사과 받기<br><span class="text-3xl text-blue-600">구구단 대작전!</span></h1>
+            <p class="text-xl text-gray-700 mb-2">3단, 6단 정답 사과를 바구니로 받으세요!</p>
+            <p class="text-lg text-pink-500 mb-8 bg-pink-50 p-3 rounded-xl border border-pink-200">
+                오답을 받거나 정답을 놓치면 하트가 줄어들어요 💔
+            </p>
+            <button onclick="startGame()" class="bg-red-500 hover:bg-red-400 text-white text-3xl px-10 py-5 rounded-full shadow-[0_6px_0_#b91c1c] active:shadow-[0_0px_0_#b91c1c] active:translate-y-[6px] transition-all">
+                게임 시작! 🚀
+            </button>
+        </div>
+
+        <div id="play-screen" class="hidden w-full h-full flex flex-col relative">
+            <!-- 상단 UI (점수, 하트, 진행) -->
+            <div class="p-4 flex justify-between items-center bg-white/80 backdrop-blur-md rounded-b-3xl shadow-sm z-20">
+                <div class="text-xl font-bold text-gray-700">
+                    진행: <span id="question-count" class="text-green-600">1</span> | 점수: <span id="score" class="text-blue-600">0</span>
+                </div>
+                <div id="hearts" class="text-2xl">
+                    ❤️❤️❤️
+                </div>
+            </div>
+            
+            <div class="absolute top-20 w-full flex justify-center z-20 pointer-events-none">
+                <div class="bg-yellow-100 border-4 border-yellow-400 text-5xl text-yellow-800 px-8 py-4 rounded-3xl shadow-lg pop" id="question-display">
+                    3 x 4 = ?
+                </div>
+            </div>
+
+            <!-- 게임 렌더링 캔버스 -->
+            <canvas id="gameCanvas" class="flex-1 w-full"></canvas>
+        </div>
+
+        <div id="result-screen" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm z-50 rounded-3xl m-4 shadow-2xl">
+            <h2 class="text-4xl text-gray-800 mb-4">게임 종료! 🧺</h2>
+            <p class="text-2xl text-gray-600 mb-2">당신의 최고 점수는...</p>
+            <div class="text-7xl text-blue-600 mb-8 font-bold drop-shadow-md pop" id="final-score">
+                0
+            </div>
+            <button onclick="resetGame()" class="bg-blue-500 hover:bg-blue-400 text-white text-3xl px-10 py-5 rounded-full shadow-[0_6px_0_#1d4ed8] active:shadow-[0_0px_0_#1d4ed8] active:translate-y-[6px] transition-all">
+                다시 도전하기 🔄
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // UI 요소
+        const startScreen = document.getElementById('start-screen');
+        const playScreen = document.getElementById('play-screen');
+        const resultScreen = document.getElementById('result-screen');
+        const scoreElement = document.getElementById('score');
+        const heartsElement = document.getElementById('hearts');
+        const questionElement = document.getElementById('question-display');
+        const finalScoreElement = document.getElementById('final-score');
+        const questionCountElement = document.getElementById('question-count');
+
+        // 게임 상태
+        let score = 0;
+        let lives = 3;
+        let gameLoopId;
+        let isPlaying = false;
+        let currentQuestionNumber = 1;
+        
+        // 현재 문제 정보
+        let currentDan = 3;
+        let currentNum = 1;
+        let currentAnswer = 3;
+        
+        // 게임 객체 배열 및 설정
+        let apples = [];
+        let baseSpeed = 2; // 초기 떨어지는 속도
+
+        // 바구니 객체
+        const basket = {
+            x: 0,
+            y: 0,
+            width: 100,
+            height: 60,
+            speed: 8 // 키보드 이동 속도 추가
+        };
+
+        // 키보드 방향키 입력 상태 저장 객체
+        const keys = {
+            ArrowLeft: false,
+            ArrowRight: false
+        };
+
+        function resizeCanvas() {
+            // 부모 컨테이너의 크기에 맞춰 캔버스 크기 조정
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height - 80; // 상단 UI 높이 제외
+            
+            // 바구니 초기 위치 (바닥 근처)
+            basket.y = canvas.height - basket.height - 20;
+            if(basket.x === 0) basket.x = canvas.width / 2 - basket.width / 2;
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // 마우스 및 터치 입력 처리 (바구니 이동)
+        function handleMove(e) {
+            if (!isPlaying) return;
+            let clientX;
+            if (e.type === 'touchmove') {
+                clientX = e.touches[0].clientX;
+            } else {
+                clientX = e.clientX;
+            }
+            
+            const rect = canvas.getBoundingClientRect();
+            // 화면 비율에 맞춰 X좌표 계산
+            let x = clientX - rect.left;
+            
+            // 바구니가 화면 밖으로 나가지 않도록 제한
+            basket.x = Math.max(0, Math.min(x - basket.width / 2, canvas.width - basket.width));
+        }
+        
+        canvas.addEventListener('mousemove', handleMove);
+        canvas.addEventListener('touchmove', handleMove);
+
+        // 키보드 누를 때 이벤트 리스너 (방향키)
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'Left') keys.ArrowLeft = true;
+            if (e.key === 'ArrowRight' || e.key === 'Right') keys.ArrowRight = true;
+        });
+
+        // 키보드 뗄 때 이벤트 리스너
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'Left') keys.ArrowLeft = false;
+            if (e.key === 'ArrowRight' || e.key === 'Right') keys.ArrowRight = false;
+        });
+
+        function generateQuestionAndApples() {
+            // 문제 번호 UI 업데이트
+            questionCountElement.innerText = `${currentQuestionNumber}`;
+
+            // 3단 또는 6단
+            const dans = [3, 6];
+            currentDan = dans[Math.floor(Math.random() * dans.length)];
+            currentNum = Math.floor(Math.random() * 9) + 1;
+            currentAnswer = currentDan * currentNum;
+
+            // UI 업데이트
+            questionElement.innerText = `${currentDan} x ${currentNum} = ?`;
+            questionElement.classList.remove('pop');
+            void questionElement.offsetWidth; // 리플로우 강제 발생 (애니메이션 재시작)
+            questionElement.classList.add('pop');
+
+            // 사과 생성 (정답 1개, 오답 3개)
+            apples = [];
+            let answers = [currentAnswer];
+            
+            while(answers.length < 4) {
+                // 단수만큼 차이나는 그럴싸한 오답 생성
+                let offset = (Math.floor(Math.random() * 4) + 1) * currentDan;
+                let wrong = Math.random() > 0.5 ? currentAnswer + offset : currentAnswer - offset;
+                if(wrong > 0 && !answers.includes(wrong)) {
+                    answers.push(wrong);
+                }
+            }
+
+            // 배열 섞기
+            answers.sort(() => Math.random() - 0.5);
+
+            // 화면을 4등분하여 사과 배치
+            const sectionWidth = canvas.width / 4;
+            answers.forEach((ans, index) => {
+                apples.push({
+                    x: sectionWidth * index + sectionWidth / 2, // 각 구역 중앙
+                    y: -50 - (Math.random() * 100), // 시간차를 두고 떨어지게 위쪽에 배치
+                    radius: 35,
+                    value: ans,
+                    isCorrect: ans === currentAnswer,
+                    speed: baseSpeed + (Math.random() * 0.5) // 점수에 따른 기본 속도 + 약간의 랜덤 속도
+                });
+            });
+        }
+
+        function drawBasket() {
+            ctx.fillStyle = '#8B4513'; // 갈색
+            // 바구니 몸통 (사다리꼴 느낌)
+            ctx.beginPath();
+            ctx.moveTo(basket.x, basket.y);
+            ctx.lineTo(basket.x + basket.width, basket.y);
+            ctx.lineTo(basket.x + basket.width - 10, basket.y + basket.height);
+            ctx.lineTo(basket.x + 10, basket.y + basket.height);
+            ctx.closePath();
+            ctx.fill();
+
+            // 바구니 테두리/장식
+            ctx.strokeStyle = '#5c2b09';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            
+            // 바구니 손잡이 무늬 등 추가 가능
+            ctx.fillStyle = '#A0522D';
+            ctx.fillRect(basket.x + 5, basket.y + 5, basket.width - 10, 10);
+        }
+
+        function drawApple(apple) {
+            // 사과 몸통 (빨강)
+            ctx.fillStyle = '#ef4444'; 
+            ctx.beginPath();
+            ctx.arc(apple.x, apple.y, apple.radius, 0, Math.PI * 2);
+            ctx.fill();
+            // 입체감 테두리
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#b91c1c';
+            ctx.stroke();
+
+            // 사과 꼭지와 잎사귀
+            ctx.fillStyle = '#65a30d'; // 초록색 잎
+            ctx.beginPath();
+            ctx.ellipse(apple.x + 10, apple.y - apple.radius + 5, 10, 5, Math.PI / 4, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.strokeStyle = '#422006'; // 갈색 꼭지
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(apple.x, apple.y - apple.radius);
+            ctx.lineTo(apple.x, apple.y - apple.radius - 10);
+            ctx.stroke();
+
+            // 사과 안의 숫자 (흰색)
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 30px Jua';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(apple.value, apple.x, apple.y + 3);
+        }
+
+        function updateHearts() {
+            let heartStr = '';
+            for(let i=0; i<3; i++) {
+                heartStr += i < lives ? '❤️' : '🖤';
+            }
+            heartsElement.innerText = heartStr;
+            
+            if(lives <= 0) {
+                gameOver();
+            }
+        }
+
+        function gameLoop() {
+            if (!isPlaying) return;
+
+            // 키보드 방향키 입력에 따른 바구니 이동 처리
+            if (keys.ArrowLeft) {
+                basket.x -= basket.speed;
+            }
+            if (keys.ArrowRight) {
+                basket.x += basket.speed;
+            }
+            
+            // 키보드 이동 시에도 화면 밖으로 나가지 않도록 제한
+            basket.x = Math.max(0, Math.min(basket.x, canvas.width - basket.width));
+
+            // 캔버스 초기화
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            drawBasket();
+
+            let allApplesMissedOrCaught = true;
+
+            for (let i = apples.length - 1; i >= 0; i--) {
+                let apple = apples[i];
+                apple.y += apple.speed;
+                
+                // 사과 그리기
+                drawApple(apple);
+
+                // 충돌 판정 (사과의 중심 좌표가 바구니 영역 안에 들어왔는지)
+                if (apple.y + apple.radius > basket.y && 
+                    apple.y - apple.radius < basket.y + basket.height &&
+                    apple.x > basket.x && 
+                    apple.x < basket.x + basket.width) {
+                    
+                    if (apple.isCorrect) {
+                        // 정답!
+                        score += 10;
+                        scoreElement.innerText = score;
+                        // 점수가 오를수록 속도 증가 (최대 속도 제한)
+                        if (score % 30 === 0 && baseSpeed < 6) baseSpeed += 0.5; 
+                        
+                        currentQuestionNumber++; // 문제 번호 증가
+                        // 새 문제 출제
+                        generateQuestionAndApples();
+                        break; // 새 사과가 생성되었으므로 현재 루프 종료
+                    } else {
+                        // 오답!
+                        lives--;
+                        updateHearts();
+                        apples.splice(i, 1); // 틀린 사과는 사라짐
+                        
+                        // 화면 흔들림 효과 (오답 피드백)
+                        canvas.style.transform = "translateX(-10px)";
+                        setTimeout(() => canvas.style.transform = "translateX(10px)", 50);
+                        setTimeout(() => canvas.style.transform = "translateX(0)", 100);
+                    }
+                }
+
+                // 바닥에 닿았는지 확인
+                if (apple.y > canvas.height + apple.radius) {
+                    if(apple.isCorrect) {
+                        // 정답을 놓쳤을 때
+                        lives--;
+                        updateHearts();
+                        
+                        currentQuestionNumber++; // 문제 번호 증가 (놓쳐도 다음 문제로 넘어감)
+                        generateQuestionAndApples(); // 놓치면 새로운 문제
+                        break;
+                    } else {
+                        // 오답 사과가 바닥으로 떨어지면 배열에서 제거
+                        apples.splice(i, 1);
+                    }
+                } else {
+                    allApplesMissedOrCaught = false;
+                }
+            }
+            
+            // 모든 사과가 (오답 포함) 처리되었는데 새 문제가 안 나왔다면 안전장치로 생성
+            if (apples.length === 0 && lives > 0) {
+                generateQuestionAndApples();
+            }
+
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        function startGame() {
+            startScreen.classList.add('hidden');
+            resultScreen.classList.add('hidden');
+            playScreen.classList.remove('hidden');
+            
+            resizeCanvas(); // 캔버스 크기 초기화
+            
+            score = 0;
+            lives = 3;
+            currentQuestionNumber = 1;
+            baseSpeed = 2.5;
+            scoreElement.innerText = score;
+            questionCountElement.innerText = `${currentQuestionNumber}`;
+            updateHearts();
+            
+            isPlaying = true;
+            generateQuestionAndApples();
+            
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        function gameOver() {
+            isPlaying = false;
+            cancelAnimationFrame(gameLoopId);
+            
+            playScreen.classList.add('hidden');
+            resultScreen.classList.remove('hidden');
+            finalScoreElement.innerText = score;
+            
+            finalScoreElement.classList.remove('pop');
+            void finalScoreElement.offsetWidth;
+            finalScoreElement.classList.add('pop');
+        }
+
+        function resetGame() {
+            resultScreen.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+        }
+
+        // 초기화
+        window.onload = resizeCanvas;
+    </script>
+</body>
+</html>
